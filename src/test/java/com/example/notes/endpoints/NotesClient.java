@@ -8,78 +8,334 @@ import io.restassured.response.Response;
 
 import static io.restassured.RestAssured.given;
 
+/**
+ * API-клиент для работы с заметками (Notes API).
+ *
+ * ЧТО ТАКОЕ API-КЛИЕНТ (паттерн API Client):
+ * Это класс, который инкапсулирует (прячет внутри себя) все детали работы с API.
+ * Вместо того, чтобы писать HTTP-запросы напрямую в тестах, мы вызываем методы этого класса.
+ *
+ * ПРЕИМУЩЕСТВА:
+ * 1. Код тестов становится проще и читабельнее
+ *    Было: given().spec(Specs.requestSpec).body(request).post("/notes")
+ *    Стало: NotesClient.createNote(request)
+ *
+ * 2. Если API изменится, мы меняем код только в одном месте - здесь
+ *    Не нужно искать и исправлять HTTP-запросы во всех тестах
+ *
+ * 3. Можно переиспользовать методы в разных тестах
+ *    Один метод createNote() используется во всех тестах, где нужно создать заметку
+ *
+ * ДВА ТИПА МЕТОДОВ В ЭТОМ КЛАССЕ:
+ * 1. Методы с суффиксом Response - возвращают полный HTTP-ответ (Response)
+ *    Используются, когда нужно проверить статус-код, заголовки, сырой JSON
+ *
+ * 2. Методы без суффикса - возвращают готовый объект Java (NoteDto)
+ *    Используются, когда нужно просто получить данные заметки
+ *
+ * ЧТО ТАКОЕ REST-ASSURED:
+ * Это библиотека для тестирования REST API на Java.
+ * Она позволяет отправлять HTTP-запросы (GET, POST, PUT, DELETE) и проверять ответы.
+ *
+ * ПАТТЕРН GIVEN-WHEN-THEN в Rest-Assured:
+ * - given()  - подготовка запроса (указываем параметры, тело, заголовки)
+ * - when()   - выполнение запроса (GET, POST, PUT, DELETE)
+ * - then()   - проверка ответа (статус-код, тело ответа)
+ *
+ * ЧТО ТАКОЕ СПЕЦИФИКАЦИЯ (spec):
+ * Это набор общих настроек для всех запросов: базовый URL, заголовки, логирование.
+ * Вместо того, чтобы указывать эти настройки в каждом запросе, мы используем spec.
+ * Specs.requestSpec содержит: baseURI, Content-Type: application/json, логирование.
+ */
 public class NotesClient {
 
+    // ==================== СОЗДАНИЕ ЗАМЕТКИ (CREATE) ====================
+
+    /**
+     * Создаёт новую заметку и возвращает ПОЛНЫЙ HTTP-ответ.
+     *
+     * КОГДА ИСПОЛЬЗОВАТЬ ЭТОТ МЕТОД:
+     * - Когда нужно проверить статус-код (например, 400 Bad Request при невалидных данных)
+     * - Когда нужно проверить заголовки ответа
+     * - Когда нужно проверить структуру ошибки в JSON
+     *
+     * КАК РАБОТАЕТ REST-ASSURED ЗДЕСЬ:
+     * 1. given() - начинаем конструировать запрос
+     * 2. .spec(Specs.requestSpec) - применяем общие настройки (baseURI, заголовки)
+     * 3. .body(request) - помещаем в тело запроса объект NoteCreateRequest
+     *    Rest-Assured автоматически сериализует объект в JSON
+     * 4. .when() - указываем, что сейчас будет выполнение запроса
+     * 5. .post(Endpoints.NOTES) - отправляем POST-запрос на /notes
+     *
+     * ЧТО ПРОИСХОДИТ ПОД КАПОТОМ:
+     * POST http://localhost:8080/notes
+     * Content-Type: application/json
+     * {
+     *   "title": "Заголовок заметки",
+     *   "content": "Содержимое заметки"
+     * }
+     *
+     * @param request объект с данными для создания заметки (title и content)
+     * @return полный HTTP-ответ (Response), который содержит статус-код, заголовки и тело
+     */
     public static Response createNoteResponse(NoteCreateRequest request) {
-        return given()
-                .spec(Specs.requestSpec)
-                .body(request)
-                .when()
-                .post(Endpoints.NOTES);
+        return given()                          // Шаг 1: Начинаем строить запрос
+                .spec(Specs.requestSpec)        // Шаг 2: Применяем общие настройки
+                .body(request)                  // Шаг 3: Добавляем тело запроса (JSON)
+                .when()                         // Шаг 4: Переходим к выполнению
+                .post(Endpoints.NOTES);         // Шаг 5: Отправляем POST на /notes
     }
 
+    /**
+     * Создаёт новую заметку и возвращает ОБЪЕКТ заметки (NoteDto).
+     *
+     * КОГДА ИСПОЛЬЗОВАТЬ ЭТОТ МЕТОД:
+     * - Когда нужно быстро создать заметку и получить её данные
+     * - Когда статус-код точно будет 200 (успешное создание)
+     * - Когда нужен ID созданной заметки для дальнейших операций
+     *
+     * КАК РАБОТАЕТ:
+     * 1. Вызывает createNoteResponse(request) - отправляет POST-запрос
+     * 2. .then() - начинаем проверку и извлечение данных из ответа
+     * 3. .statusCode(200) - проверяем, что статус-код = 200 (успех)
+     * 4. .extract().jsonPath() - извлекаем JSON из ответа
+     * 5. .getObject("data", NoteDto.class) - достаём поле "data" и преобразуем в NoteDto
+     *
+     * ЧТО ТАКОЕ ДЕСЕРИАЛИЗАЦИЯ:
+     * Это процесс преобразования JSON (текста) в объект Java.
+     * JSON → Java объект
+     * {"id":"123","title":"Заголовок"} → new NoteDto("123", "Заголовок", ...)
+     *
+     * СТРУКТУРА ОТВЕТА API:
+     * {
+     *   "data": {
+     *     "id": "123",
+     *     "title": "Заголовок",
+     *     "content": "Текст"
+     *   }
+     * }
+     * Мы берём объект из поля "data" и превращаем его в NoteDto
+     *
+     * @param request объект с данными для создания заметки
+     * @return объект NoteDto с данными созданной заметки (включая сгенерированный ID)
+     */
     public static NoteDto createNote(NoteCreateRequest request) {
-        return createNoteResponse(request)
-                .then()
-                .statusCode(200)
-                .extract()
-                .jsonPath()
-                .getObject("data", NoteDto.class);
+        return createNoteResponse(request)      // Шаг 1: Отправляем POST-запрос
+                .then()                         // Шаг 2: Начинаем обработку ответа
+                .statusCode(200)                // Шаг 3: Проверяем успешный статус
+                .extract()                      // Шаг 4: Извлекаем данные из ответа
+                .jsonPath()                     // Шаг 5: Парсим JSON
+                .getObject("data", NoteDto.class); // Шаг 6: Десериализуем в NoteDto
     }
 
+    // ==================== ПОЛУЧЕНИЕ ЗАМЕТКИ ПО ID (READ) ====================
+
+    /**
+     * Получает заметку по ID и возвращает ПОЛНЫЙ HTTP-ответ.
+     *
+     * КОГДА ИСПОЛЬЗОВАТЬ ЭТОТ МЕТОД:
+     * - Когда нужно проверить ошибку 404 (заметка не найдена)
+     * - Когда нужно проверить ошибку 400 (невалидный ID)
+     * - Когда нужно проверить заголовки или полную структуру ответа
+     *
+     * КАК РАБОТАЕТ:
+     * 1. given() - начинаем строить запрос
+     * 2. .spec(Specs.requestSpec) - применяем общие настройки
+     * 3. .pathParam("id", id) - подставляем значение id вместо {id} в URL
+     *    Например: /notes/{id} превратится в /notes/123
+     * 4. .when() - переходим к выполнению
+     * 5. .get(Endpoints.NOTES_BY_ID) - отправляем GET-запрос на /notes/{id}
+     *
+     * ЧТО ПРОИСХОДИТ ПОД КАПОТОМ:
+     * GET http://localhost:8080/notes/123
+     *
+     * @param id идентификатор заметки (например, "123")
+     * @return полный HTTP-ответ
+     */
     public static Response getNoteResponse(String id) {
-        return given()
-                .spec(Specs.requestSpec)
-                .pathParam("id", id)
-                .when()
-                .get(Endpoints.NOTES_BY_ID);
+        return given()                          // Шаг 1: Начинаем строить запрос
+                .spec(Specs.requestSpec)        // Шаг 2: Применяем общие настройки
+                .pathParam("id", id)            // Шаг 3: Подставляем ID в URL
+                .when()                         // Шаг 4: Переходим к выполнению
+                .get(Endpoints.NOTES_BY_ID);    // Шаг 5: Отправляем GET на /notes/{id}
     }
 
+    /**
+     * Получает заметку по ID и возвращает ОБЪЕКТ заметки (NoteDto).
+     *
+     * КОГДА ИСПОЛЬЗОВАТЬ ЭТОТ МЕТОД:
+     * - Когда нужно быстро получить данные заметки
+     * - Когда точно известно, что заметка существует (статус 200)
+     *
+     * КАК РАБОТАЕТ:
+     * Аналогично createNote() - вызывает getNoteResponse(), проверяет статус 200,
+     * извлекает JSON и десериализует в объект NoteDto.
+     *
+     * @param id идентификатор заметки
+     * @return объект NoteDto с данными заметки
+     */
     public static NoteDto getNote(String id) {
-        return getNoteResponse(id)
-                .then()
-                .statusCode(200)
-                .extract()
-                .jsonPath()
-                .getObject("data", NoteDto.class);
+        return getNoteResponse(id)              // Шаг 1: Отправляем GET-запрос
+                .then()                         // Шаг 2: Начинаем обработку ответа
+                .statusCode(200)                // Шаг 3: Проверяем успешный статус
+                .extract()                      // Шаг 4: Извлекаем данные
+                .jsonPath()                     // Шаг 5: Парсим JSON
+                .getObject("data", NoteDto.class); // Шаг 6: Десериализуем в NoteDto
     }
 
+    // ==================== ОБНОВЛЕНИЕ ЗАМЕТКИ (UPDATE) ====================
+
+    /**
+     * Обновляет заметку и возвращает ПОЛНЫЙ HTTP-ответ.
+     *
+     * КОГДА ИСПОЛЬЗОВАТЬ ЭТОТ МЕТОД:
+     * - Когда нужно проверить ошибки (404, 400)
+     * - Когда нужно проверить статус-код или заголовки
+     *
+     * КАК РАБОТАЕТ:
+     * 1. given() - начинаем строить запрос
+     * 2. .spec(Specs.requestSpec) - применяем общие настройки
+     * 3. .pathParam("id", id) - подставляем ID в URL
+     * 4. .body(request) - добавляем в тело запроса объект NoteUpdateRequest
+     *    Rest-Assured автоматически конвертирует его в JSON
+     * 5. .when() - переходим к выполнению
+     * 6. .put(Endpoints.NOTES_BY_ID) - отправляем PUT-запрос на /notes/{id}
+     *
+     * ЧТО ПРОИСХОДИТ ПОД КАПОТОМ:
+     * PUT http://localhost:8080/notes/123
+     * Content-Type: application/json
+     * {
+     *   "title": "Новый заголовок",
+     *   "content": "Новое содержимое"
+     * }
+     *
+     * @param id идентификатор заметки для обновления
+     * @param request объект с новыми данными (title и content)
+     * @return полный HTTP-ответ
+     */
     public static Response updateNoteResponse(String id, NoteUpdateRequest request) {
-        return given()
-                .spec(Specs.requestSpec)
-                .pathParam("id", id)
-                .body(request)
-                .when()
-                .put(Endpoints.NOTES_BY_ID);
+        return given()                          // Шаг 1: Начинаем строить запрос
+                .spec(Specs.requestSpec)        // Шаг 2: Применяем общие настройки
+                .pathParam("id", id)            // Шаг 3: Подставляем ID в URL
+                .body(request)                  // Шаг 4: Добавляем тело (JSON)
+                .when()                         // Шаг 5: Переходим к выполнению
+                .put(Endpoints.NOTES_BY_ID);    // Шаг 6: Отправляем PUT на /notes/{id}
     }
 
+    /**
+     * Обновляет заметку и возвращает ОБЪЕКТ обновлённой заметки (NoteDto).
+     *
+     * КОГДА ИСПОЛЬЗОВАТЬ ЭТОТ МЕТОД:
+     * - Когда нужно быстро обновить заметку и получить новые данные
+     * - Когда точно известно, что обновление пройдёт успешно (статус 200)
+     *
+     * КАК РАБОТАЕТ:
+     * Вызывает updateNoteResponse(), проверяет статус 200,
+     * извлекает JSON и десериализует в объект NoteDto.
+     *
+     * @param id идентификатор заметки
+     * @param request объект с новыми данными
+     * @return объект NoteDto с обновлёнными данными заметки
+     */
     public static NoteDto updateNote(String id, NoteUpdateRequest request) {
-        return updateNoteResponse(id, request)
-                .then()
-                .statusCode(200)
-                .extract()
-                .jsonPath()
-                .getObject("data", NoteDto.class);
+        return updateNoteResponse(id, request)  // Шаг 1: Отправляем PUT-запрос
+                .then()                         // Шаг 2: Начинаем обработку ответа
+                .statusCode(200)                // Шаг 3: Проверяем успешный статус
+                .extract()                      // Шаг 4: Извлекаем данные
+                .jsonPath()                     // Шаг 5: Парсим JSON
+                .getObject("data", NoteDto.class); // Шаг 6: Десериализуем в NoteDto
     }
 
+    // ==================== УДАЛЕНИЕ ЗАМЕТКИ (DELETE) ====================
+
+    /**
+     * Удаляет заметку и возвращает ПОЛНЫЙ HTTP-ответ.
+     *
+     * КОГДА ИСПОЛЬЗОВАТЬ ЭТОТ МЕТОД:
+     * - Когда нужно проверить ошибки (404, 400)
+     * - Когда нужно проверить статус-код удаления
+     *
+     * КАК РАБОТАЕТ:
+     * 1. given() - начинаем строить запрос
+     * 2. .spec(Specs.requestSpec) - применяем общие настройки
+     * 3. .pathParam("id", id) - подставляем ID в URL
+     * 4. .when() - переходим к выполнению
+     * 5. .delete(Endpoints.NOTES_BY_ID) - отправляем DELETE-запрос на /notes/{id}
+     *
+     * ЧТО ПРОИСХОДИТ ПОД КАПОТОМ:
+     * DELETE http://localhost:8080/notes/123
+     *
+     * @param id идентификатор заметки для удаления
+     * @return полный HTTP-ответ
+     */
     public static Response deleteNoteResponse(String id) {
-        return given()
-                .spec(Specs.requestSpec)
-                .pathParam("id", id)
-                .when()
-                .delete(Endpoints.NOTES_BY_ID);
+        return given()                          // Шаг 1: Начинаем строить запрос
+                .spec(Specs.requestSpec)        // Шаг 2: Применяем общие настройки
+                .pathParam("id", id)            // Шаг 3: Подставляем ID в URL
+                .when()                         // Шаг 4: Переходим к выполнению
+                .delete(Endpoints.NOTES_BY_ID); // Шаг 5: Отправляем DELETE на /notes/{id}
     }
 
+    /**
+     * Удаляет заметку и НЕ возвращает данных (void).
+     *
+     * КОГДА ИСПОЛЬЗОВАТЬ ЭТОТ МЕТОД:
+     * - Когда нужно просто удалить заметку (например, очистка после теста)
+     * - Когда точно известно, что удаление пройдёт успешно (статус 200)
+     *
+     * ПОЧЕМУ void:
+     * При удалении обычно не нужны никакие данные - достаточно знать, что операция прошла успешно.
+     * Поэтому этот метод просто проверяет статус 200 и ничего не возвращает.
+     *
+     * КАК РАБОТАЕТ:
+     * Вызывает deleteNoteResponse(), проверяет статус 200, но ничего не возвращает.
+     *
+     * @param id идентификатор заметки для удаления
+     */
     public static void deleteNote(String id) {
-        deleteNoteResponse(id)
-                .then()
-                .statusCode(200);
+        deleteNoteResponse(id)                  // Шаг 1: Отправляем DELETE-запрос
+                .then()                         // Шаг 2: Начинаем обработку ответа
+                .statusCode(200);               // Шаг 3: Проверяем успешный статус
+        // Ничего не возвращаем - метод void
     }
 
+    // ==================== ПОЛУЧЕНИЕ ВСЕХ ЗАМЕТОК (LIST) ====================
+
+    /**
+     * Получает список всех заметок и возвращает ПОЛНЫЙ HTTP-ответ.
+     *
+     * КОГДА ИСПОЛЬЗОВАТЬ ЭТОТ МЕТОД:
+     * - Когда нужно проверить структуру списка заметок
+     * - Когда нужно проверить статус-код
+     * - Когда нужно работать с массивом заметок (десериализовать в List<NoteDto>)
+     *
+     * КАК РАБОТАЕТ:
+     * 1. given() - начинаем строить запрос
+     * 2. .spec(Specs.requestSpec) - применяем общие настройки
+     * 3. .when() - переходим к выполнению
+     * 4. .get(Endpoints.NOTES) - отправляем GET-запрос на /notes
+     *
+     * ЧТО ПРОИСХОДИТ ПОД КАПОТОМ:
+     * GET http://localhost:8080/notes
+     *
+     * СТРУКТУРА ОТВЕТА:
+     * {
+     *   "data": [
+     *     {"id":"1","title":"Первая","content":"Текст 1"},
+     *     {"id":"2","title":"Вторая","content":"Текст 2"}
+     *   ]
+     * }
+     *
+     * @return полный HTTP-ответ со списком заметок
+     */
     public static Response getAllNotesResponse() {
-        return given()
-                .spec(Specs.requestSpec)
-                .when()
-                .get(Endpoints.NOTES);
+        return given()                          // Шаг 1: Начинаем строить запрос
+                .spec(Specs.requestSpec)        // Шаг 2: Применяем общие настройки
+                .when()                         // Шаг 3: Переходим к выполнению
+                .get(Endpoints.NOTES);          // Шаг 4: Отправляем GET на /notes
     }
+
+    // Примечание: Метод getAllNotes() (который бы возвращал List<NoteDto>) не реализован,
+    // потому что в тестах обычно проверяется весь Response.
+    // Если понадобится, его можно добавить по аналогии с getNote().
 }
