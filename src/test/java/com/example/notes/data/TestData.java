@@ -2,6 +2,9 @@ package com.example.notes.data;
 
 import com.example.notes.models.NoteCreateRequest;
 import com.example.notes.models.NoteUpdateRequest;
+import com.example.notes.models.UserRegisterRequest;
+
+import java.util.UUID;
 
 /**
  * Класс TestData - хранилище тестовых данных для всех тестов приложения.
@@ -215,6 +218,75 @@ public class TestData {
                 "Updated description content", // Новое описание
                 "Work",                      // Новая категория
                 true                         // Помечаем заметку как выполненную
+        );
+    }
+
+    // ==================== ТЕСТОВЫЕ ПОЛЬЗОВАТЕЛИ ====================
+
+    /**
+     * Создаёт УНИКАЛЬНОГО тестового пользователя для регистрации.
+     *
+     * ЗАЧЕМ УНИКАЛЬНЫЙ:
+     * Notes API требует уникальный email для каждого пользователя.
+     * Если использовать фиксированный email, второй тест упадёт с ошибкой
+     * "User already exists". Поэтому мы генерируем уникальный email
+     * с помощью UUID (универсальный уникальный идентификатор).
+     *
+     * ЧТО ТАКОЕ UUID:
+     * UUID - это 128-битное число, которое гарантированно уникально.
+     * Пример: "550e8400-e29b-41d4-a716-446655440000"
+     * Вероятность коллизии (повторения) практически нулевая.
+     *
+     * ФОРМАТ ДАННЫХ:
+     * - name: "Test User" (одинаковый для всех тестов)
+     * - email: "test-{uuid}@example.com" (уникальный для каждого вызова)
+     * - password: "TestPassword123" (одинаковый для всех тестов)
+     *
+     * ТРЕБОВАНИЯ Notes API к паролю:
+     * - Минимум 6 символов
+     * - Содержит буквы и цифры
+     *
+     * ПРИМЕР ИСПОЛЬЗОВАНИЯ:
+     * <pre>
+     * {@code
+     * @BeforeEach
+     * void setUp() {
+     *     // Каждый тест получит уникального пользователя
+     *     UserRegisterRequest user = TestData.randomUser();
+     *     String token = AuthClient.registerAndLogin(user);
+     * }
+     * }
+     * </pre>
+     *
+     * @return объект UserRegisterRequest с уникальным email
+     */
+    public static UserRegisterRequest randomUser() {
+        // Генерируем уникальный идентификатор
+        String uniqueId = UUID.randomUUID().toString().substring(0, 8);
+
+        return new UserRegisterRequest(
+                "Test User",                              // Имя пользователя
+                "test-" + uniqueId + "@example.com",      // Уникальный email
+                "TestPassword123"                         // Пароль (минимум 6 символов)
+        );
+    }
+
+    /**
+     * Создаёт тестового пользователя с заданным email.
+     *
+     * КОГДА ИСПОЛЬЗОВАТЬ:
+     * Когда нужен конкретный email, например для негативных тестов:
+     * - Тест на дублирование email (регистрация с уже существующим email)
+     * - Тест на невалидный email
+     *
+     * @param email email пользователя
+     * @return объект UserRegisterRequest с указанным email
+     */
+    public static UserRegisterRequest userWithEmail(String email) {
+        return new UserRegisterRequest(
+                "Test User",
+                email,
+                "TestPassword123"
         );
     }
 

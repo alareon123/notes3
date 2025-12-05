@@ -35,61 +35,110 @@ import io.restassured.specification.RequestSpecification;
  * КАК РАБОТАЕТ Rest-Assured:
  * Rest-Assured - это библиотека для тестирования REST API на Java.
  * Она позволяет делать HTTP-запросы (GET, POST, PUT, DELETE) и проверять ответы.
+ *
+ * ДВЕ СПЕЦИФИКАЦИИ В ЭТОМ КЛАССЕ:
+ * 1. requestSpec - базовая спецификация БЕЗ авторизации (для регистрации и логина)
+ * 2. authSpec - спецификация С авторизацией (для работы с заметками)
  */
 public class Specs {
 
     /**
-     * Спецификация запроса для всех API-тестов.
+     * Базовая спецификация запроса БЕЗ авторизации.
      *
-     * ПОЧЕМУ STATIC:
-     * - static означает, что переменная принадлежит классу, а не объекту
-     * - Можно обращаться через Specs.requestSpec без создания объекта
-     * - Все тесты будут использовать одну и ту же спецификацию
-     *
-     * ПОЧЕМУ PUBLIC:
-     * - Нужно, чтобы тесты могли получить доступ к этой спецификации
-     * - Используется как: given().spec(Specs.requestSpec)
+     * КОГДА ИСПОЛЬЗОВАТЬ:
+     * - Для регистрации пользователя (POST /users/register)
+     * - Для входа (POST /users/login)
+     * - Для любых публичных эндпоинтов, не требующих авторизации
      */
     public static RequestSpecification requestSpec;
 
     /**
-     * Создаёт и настраивает спецификацию запроса для Rest-Assured.
-     * Этот метод вызывается один раз перед всеми тестами (из BaseApiTest.setUp()).
+     * Спецификация запроса С авторизацией (включает токен в заголовке X-AUTH-TOKEN).
      *
-     * ПОЧЕМУ STATIC:
-     * - Метод вызывается из static метода BaseApiTest.setUp()
-     * - Не требует создания объекта класса Specs
+     * КОГДА ИСПОЛЬЗОВАТЬ:
+     * - Для работы с заметками (GET/POST/PUT/DELETE /notes)
+     * - Для любых защищённых эндпоинтов, требующих авторизации
+     *
+     * ВАЖНО: Эта спецификация создаётся ПОСЛЕ успешного логина,
+     * когда токен уже получен. До логина она будет null.
+     */
+    public static RequestSpecification authSpec;
+
+    /**
+     * Текущий токен авторизации.
+     * Хранится для возможности удаления пользователя после теста.
+     */
+    private static String currentToken;
+
+    /**
+     * Создаёт и настраивает БАЗОВУЮ спецификацию запроса (без авторизации).
+     * Этот метод вызывается один раз перед всеми тестами (из BaseApiTest.setUp()).
      *
      * ЧТО ДЕЛАЕТ МЕТОД:
      * Создаёт объект RequestSpecification с помощью паттерна "строитель" (Builder).
-     * Паттерн Builder позволяет пошагово настраивать сложный объект.
      */
     public static void setupRequestSpec() {
-        // Создаём спецификацию с помощью RequestSpecBuilder
+        // Создаём базовую спецификацию (без токена)
         requestSpec = new RequestSpecBuilder()
-                // Устанавливаем базовый URL (например, http://localhost:8080)
-                // Берётся из переменных окружения или конфигурации
-                // После этого в тестах можно писать только .get("/api/notes"),
-                // а полный URL будет http://localhost:8080/api/notes
                 .setBaseUri(TestEnv.getBaseUrl())
-
-                // Устанавливаем тип содержимого запроса как JSON
-                // Добавляет заголовок: Content-Type: application/json
-                // Это говорит серверу, что мы отправляем данные в формате JSON
                 .setContentType(ContentType.JSON)
-
-                // Говорим серверу, что ожидаем ответ в формате JSON
-                // Добавляет заголовок: Accept: application/json
-                // Это говорит серверу, что хотим получить ответ в JSON
                 .setAccept(ContentType.JSON)
-
-                // Включаем подробное логирование всех запросов
-                // В консоли будут видны: URL, заголовки, тело запроса
-                // Очень полезно для отладки тестов
-                // LogDetail.ALL - логировать всё (можно выбрать только headers или только body)
                 .log(LogDetail.ALL)
-
-                // Завершаем создание и возвращаем готовую спецификацию
                 .build();
+    }
+
+    /**
+     * Создаёт АВТОРИЗОВАННУЮ спецификацию с токеном.
+     *
+     * КОГДА ВЫЗЫВАТЬ:
+     * После успешного логина, когда получен токен авторизации.
+     *
+     * ЧТО ДЕЛАЕТ:
+     * Создаёт новую спецификацию, которая включает заголовок X-AUTH-TOKEN.
+     * Все запросы с этой спецификацией будут автоматически авторизованы.
+     *
+     * ПРИМЕР ИСПОЛЬЗОВАНИЯ:
+     * 1. String token = AuthClient.login(loginRequest).getToken();
+     * 2. Specs.setupAuthSpec(token);
+     * 3. NotesClient.createNote(request); // Автоматически использует authSpec
+     *
+     * @param token токен авторизации, полученный при логине
+     */
+    public static void setupAuthSpec(String token) {
+        currentToken = token;
+        authSpec = new RequestSpecBuilder()
+                .setBaseUri(TestEnv.getBaseUrl())
+                .setContentType(ContentType.JSON)
+                .setAccept(ContentType.JSON)
+                // Добавляем заголовок авторизации
+                // X-AUTH-TOKEN - имя заголовка, которое требует Notes API
+                .addHeader("X-AUTH-TOKEN", token)
+                .log(LogDetail.ALL)
+                .build();
+    }
+
+    /**
+     * Получить текущий токен авторизации.
+     *
+     * КОГДА ИСПОЛЬЗОВАТЬ:
+     * - Для удаления аккаунта после теста (cleanup)
+     * - Для проверки, что токен был установлен
+     *
+     * @return текущий токен или null, если пользователь не авторизован
+     */
+    public static String getCurrentToken() {
+        return currentToken;
+    }
+
+    /**
+     * Очистить авторизацию (сбросить токен и authSpec).
+     *
+     * КОГДА ИСПОЛЬЗОВАТЬ:
+     * - В tearDown() после удаления пользователя
+     * - Для подготовки к новому тесту с новым пользователем
+     */
+    public static void clearAuth() {
+        currentToken = null;
+        authSpec = null;
     }
 }

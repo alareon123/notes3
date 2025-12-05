@@ -45,7 +45,13 @@ import static io.restassured.RestAssured.given;
  * ЧТО ТАКОЕ СПЕЦИФИКАЦИЯ (spec):
  * Это набор общих настроек для всех запросов: базовый URL, заголовки, логирование.
  * Вместо того, чтобы указывать эти настройки в каждом запросе, мы используем spec.
- * Specs.requestSpec содержит: baseURI, Content-Type: application/json, логирование.
+ *
+ * ДВЕ СПЕЦИФИКАЦИИ:
+ * - Specs.requestSpec - БЕЗ авторизации (для регистрации, логина)
+ * - Specs.authSpec - С авторизацией (для работы с заметками)
+ *
+ * ВАЖНО: Все методы NotesClient используют authSpec, потому что
+ * Notes API требует авторизации для всех операций с заметками.
  */
 public class NotesClient {
 
@@ -80,7 +86,7 @@ public class NotesClient {
      */
     public static Response createNoteResponse(NoteCreateRequest request) {
         return given()                          // Шаг 1: Начинаем строить запрос
-                .spec(Specs.requestSpec)        // Шаг 2: Применяем общие настройки
+                .spec(Specs.authSpec)           // Шаг 2: Применяем настройки С АВТОРИЗАЦИЕЙ
                 .body(request)                  // Шаг 3: Добавляем тело запроса (JSON)
                 .when()                         // Шаг 4: Переходим к выполнению
                 .post(Endpoints.NOTES);         // Шаг 5: Отправляем POST на /notes
@@ -154,7 +160,7 @@ public class NotesClient {
      */
     public static Response getNoteResponse(String id) {
         return given()                          // Шаг 1: Начинаем строить запрос
-                .spec(Specs.requestSpec)        // Шаг 2: Применяем общие настройки
+                .spec(Specs.authSpec)           // Шаг 2: Применяем настройки С АВТОРИЗАЦИЕЙ
                 .pathParam("id", id)            // Шаг 3: Подставляем ID в URL
                 .when()                         // Шаг 4: Переходим к выполнению
                 .get(Endpoints.NOTES_BY_ID);    // Шаг 5: Отправляем GET на /notes/{id}
@@ -215,7 +221,7 @@ public class NotesClient {
      */
     public static Response updateNoteResponse(String id, NoteUpdateRequest request) {
         return given()                          // Шаг 1: Начинаем строить запрос
-                .spec(Specs.requestSpec)        // Шаг 2: Применяем общие настройки
+                .spec(Specs.authSpec)           // Шаг 2: Применяем настройки С АВТОРИЗАЦИЕЙ
                 .pathParam("id", id)            // Шаг 3: Подставляем ID в URL
                 .body(request)                  // Шаг 4: Добавляем тело (JSON)
                 .when()                         // Шаг 5: Переходим к выполнению
@@ -270,7 +276,7 @@ public class NotesClient {
      */
     public static Response deleteNoteResponse(String id) {
         return given()                          // Шаг 1: Начинаем строить запрос
-                .spec(Specs.requestSpec)        // Шаг 2: Применяем общие настройки
+                .spec(Specs.authSpec)           // Шаг 2: Применяем настройки С АВТОРИЗАЦИЕЙ
                 .pathParam("id", id)            // Шаг 3: Подставляем ID в URL
                 .when()                         // Шаг 4: Переходим к выполнению
                 .delete(Endpoints.NOTES_BY_ID); // Шаг 5: Отправляем DELETE на /notes/{id}
@@ -330,7 +336,7 @@ public class NotesClient {
      */
     public static Response getAllNotesResponse() {
         return given()                          // Шаг 1: Начинаем строить запрос
-                .spec(Specs.requestSpec)        // Шаг 2: Применяем общие настройки
+                .spec(Specs.authSpec)           // Шаг 2: Применяем настройки С АВТОРИЗАЦИЕЙ
                 .when()                         // Шаг 3: Переходим к выполнению
                 .get(Endpoints.NOTES);          // Шаг 4: Отправляем GET на /notes
     }

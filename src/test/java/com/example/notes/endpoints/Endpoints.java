@@ -51,6 +51,34 @@ public class Endpoints {
      */
     public static final String NOTES_BY_ID = "/notes/{id}";
 
+    // ==================== USER ENDPOINTS (Авторизация) ====================
+
+    /**
+     * Эндпоинт для регистрации нового пользователя.
+     * POST /users/register - создать нового пользователя
+     */
+    public static final String USERS_REGISTER = "/users/register";
+
+    /**
+     * Эндпоинт для входа пользователя.
+     * POST /users/login - получить токен авторизации
+     */
+    public static final String USERS_LOGIN = "/users/login";
+
+    /**
+     * Эндпоинт для получения профиля текущего пользователя.
+     * GET /users/profile - получить данные авторизованного пользователя
+     */
+    public static final String USERS_PROFILE = "/users/profile";
+
+    /**
+     * Эндпоинт для удаления аккаунта пользователя.
+     * DELETE /users/delete-account - удалить аккаунт (требует авторизации)
+     */
+    public static final String USERS_DELETE = "/users/delete-account";
+
+    // ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
+
     /**
      * Вспомогательный метод для создания URL заметки с конкретным ID.
      *
